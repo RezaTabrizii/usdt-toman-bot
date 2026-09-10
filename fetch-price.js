@@ -79,12 +79,10 @@ async function main() {
     console.error(`Gold 18k fetch failed: ${err.message}`);
   }
 
-  const now = new Date().toLocaleString("en-US", { timeZone: "Asia/Tehran" });
-  let message = `💵 USDT/Toman\n\n${toman.toLocaleString()} Toman`;
+  let message = `💵 USDT: ${toman.toLocaleString()} Toman`;
   if (gold18) {
-    message += `\n\n🥇 Gold 18k / gram\n\n${gold18.toLocaleString()} Toman`;
+    message += `\n🥇 Gold 18k: ${gold18.toLocaleString()} Toman/g`;
   }
-  message += `\n\n🕒 ${now}`;
 
   // 3. Send to Telegram channel
   const tgRes = await fetch(
