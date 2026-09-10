@@ -1,16 +1,17 @@
 # usdt-toman-bot
 
-Sends the current USDT price in Toman to a Telegram channel, once per hour, via a GitHub Actions cron job.
+Sends the current USDT price in Toman (and the 18k gold price per gram) to a Telegram channel, once per hour, via a GitHub Actions cron job.
 
 ## How it works
 
 [fetch-price.js](fetch-price.js):
 
-1. Fetches the `usdt-rls` market stats from the [Nobitex](https://nobitex.ir) public API.
-2. Converts the latest Rial price to Toman (`rial / 10`).
-3. Posts a message to a Telegram chat/channel using the Bot API, including a Tehran-time timestamp.
+1. Fetches the USDT/Toman price from the [Nobitex](https://nobitex.ir) public API, converting the latest Rial price to Toman (`rial / 10`).
+2. If Nobitex fails, falls back to the [Wallex](https://wallex.ir) `USDTTMN` market.
+3. Fetches the 18k gold price per gram by scraping [tgju.org](https://www.tgju.org/profile/geram18) (optional — a failure here doesn't block the USDT report).
+4. Posts a compact message to a Telegram chat/channel using the Bot API, with USDT and gold each on a single line so both show in the notification preview.
 
-[.github/workflows/fetch-price.yml](.github/workflows/fetch-price.yml) runs the script on Node 20:
+[.github/workflows/fetch-price.yml](.github/workflows/fetch-price.yml) runs the script on Node 22:
 
 - On a schedule: `0 * * * *` (every hour).
 - Manually via `workflow_dispatch`.
@@ -39,9 +40,8 @@ TELEGRAM_BOT_TOKEN=xxxx TELEGRAM_CHAT_ID=xxxx node fetch-price.js
 ## Message format
 
 ```
-💵 USDT/Toman
-
-97,850 Toman
-
-🕒 9/10/2026, 6:00:00 PM
+💵 USDT: 97,850 Toman
+🥇 Gold 18k: 7,890,123 Toman/g
 ```
+
+The gold line is omitted if the gold price can't be fetched.
