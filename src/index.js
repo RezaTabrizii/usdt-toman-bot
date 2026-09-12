@@ -1,116 +1,46 @@
-// Get USDT/Toman price from Nobitex
-async function getPriceFromNobitex() {
-  const res = await fetch("https://api.nobitex.ir/market/stats", {
+// This Worker does NOT fetch prices itself. Nobitex/Wallex block requests
+// coming from Cloudflare's IP ranges (their WAF/anti-bot layer), so the
+// actual fetching still runs on a GitHub Actions runner, where it works.
+//
+// Instead, this Worker's only job is to fire reliably on a Cron Trigger
+// and tell GitHub, via the Actions API, to run that workflow right now —
+// trading GitHub's imprecise built-in `schedule:` cron for Cloudflare's
+// precise one, while keeping the actual network calls on GitHub's runners.
+
+// Ask GitHub to run the fetch-price workflow via workflow_dispatch
+async function dispatchWorkflow(env) {
+  const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_WORKFLOW_FILE } = env;
+  if (!GITHUB_TOKEN || !GITHUB_OWNER || !GITHUB_REPO || !GITHUB_WORKFLOW_FILE) {
+    throw new Error(
+      "GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO / GITHUB_WORKFLOW_FILE are not configured",
+    );
+  }
+
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${GITHUB_WORKFLOW_FILE}/dispatches`;
+
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ srcCurrency: "usdt", dstCurrency: "rls" }),
-  });
-  if (!res.ok) throw new Error(`Nobitex error: ${res.status}`);
-
-  const data = await res.json();
-  const stat = data.stats["usdt-rls"];
-  if (!stat) throw new Error("usdt-rls pair not found in response");
-
-  const rial = Number(stat.latest);
-  if (!rial) throw new Error("Nobitex returned an invalid price");
-
-  return Math.round(rial / 10);
-}
-
-// Fallback: get USDT/Toman price from Wallex
-async function getPriceFromWallex() {
-  const res = await fetch("https://api.wallex.ir/v1/markets");
-  if (!res.ok) throw new Error(`Wallex error: ${res.status}`);
-
-  const data = await res.json();
-  const symbol = data?.result?.symbols?.USDTTMN;
-  if (!symbol) throw new Error("USDTTMN pair not found in response");
-
-  const toman = Number(symbol.stats?.lastPrice);
-  if (!toman) throw new Error("Wallex returned an invalid price");
-
-  return Math.round(toman);
-}
-
-// Get 18 karat gold price (Toman per gram) by scraping tgju.org
-async function getGold18Price() {
-  const res = await fetch("https://www.tgju.org/profile/geram18", {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; CurrencyPriceService/1.1)",
+      "content-type": "application/json",
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${GITHUB_TOKEN}`,
+      "user-agent": "usdt-toman-bot-worker",
+      "x-github-api-version": "2022-11-28",
     },
+    body: JSON.stringify({ ref: "main" }),
   });
-  if (!res.ok) throw new Error(`tgju error: ${res.status}`);
 
-  const html = await res.text();
-  if (!html) throw new Error("tgju returned an empty response");
-
-  const match = html.match(
-    /data-col=["']info\.last_trade\.PDrCotVal["'][^>]*>([^<]+)</,
-  );
-  if (!match) throw new Error("gold price node not found in response");
-
-  const rial = Number(match[1].replace(/[,\s]/g, ""));
-  if (!rial) throw new Error("tgju returned an invalid price");
-
-  return Math.round(rial / 10);
-}
-
-// Fetch both prices and post the report to Telegram
-async function report(env) {
-  const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = env;
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    throw new Error("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID are not configured");
+  if (res.status !== 204) {
+    const body = await res.text();
+    throw new Error(`GitHub dispatch failed: ${res.status} ${body}`);
   }
-
-  // 1. Get USDT/Toman price, falling back to Wallex if Nobitex fails
-  let toman;
-  let source;
-  try {
-    toman = await getPriceFromNobitex();
-    source = "Nobitex";
-  } catch (err) {
-    console.error(`Nobitex failed, trying Wallex: ${err.message}`);
-    toman = await getPriceFromWallex();
-    source = "Wallex";
-  }
-
-  // 2. Get 18 karat gold price (optional — don't block the USDT report if it fails)
-  let gold18;
-  try {
-    gold18 = await getGold18Price();
-  } catch (err) {
-    console.error(`Gold 18k fetch failed: ${err.message}`);
-  }
-
-  let message = `💵 USDT: ${toman.toLocaleString("en-US")} Toman`;
-  if (gold18) {
-    message += `\n🥇 Gold 18k: ${gold18.toLocaleString("en-US")} Toman/g`;
-  }
-
-  // 3. Send to Telegram channel
-  const tgRes = await fetch(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message }),
-    },
-  );
-
-  if (!tgRes.ok) {
-    const err = await tgRes.text();
-    throw new Error(`Telegram error: ${err}`);
-  }
-
-  console.log(`Sent: ${toman} Toman (${source})`);
-  return { toman, gold18, source };
 }
 
 export default {
   // Runs on the Cron Trigger defined in wrangler.toml
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(
-      report(env).catch((err) => {
+      dispatchWorkflow(env).catch((err) => {
         console.error(err);
         throw err; // surfaces as a failed cron invocation in the dashboard
       }),
@@ -130,8 +60,8 @@ export default {
     }
 
     try {
-      const result = await report(env);
-      return Response.json({ ok: true, ...result });
+      await dispatchWorkflow(env);
+      return Response.json({ ok: true, dispatched: true });
     } catch (err) {
       return Response.json({ ok: false, error: err.message }, { status: 500 });
     }

@@ -6,7 +6,12 @@ compatibility_date = "2025-09-01"
 [triggers]
 crons = ["0 * * * *"]
 
+# Non-secret config: which GitHub repo/workflow to dispatch
+[vars]
+GITHUB_OWNER = "RezaTabrizii"
+GITHUB_REPO = "usdt-toman-bot"
+GITHUB_WORKFLOW_FILE = "fetch-price.yml"
+
 # Secrets (set with `wrangler secret put <NAME>`, never commit them):
-#   TELEGRAM_BOT_TOKEN
-#   TELEGRAM_CHAT_ID
-#   TRIGGER_SECRET     (optional — enables the manual GET /run?key=... endpoint)
+#   GITHUB_TOKEN     fine-grained PAT scoped to the repo above, "Actions: Read and write"
+#   TRIGGER_SECRET   optional — enables the manual GET /run?key=... endpoint

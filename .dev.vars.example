@@ -1,3 +1,2 @@
-TELEGRAM_BOT_TOKEN=xxxx
-TELEGRAM_CHAT_ID=@mychannel
+GITHUB_TOKEN=github_pat_xxxx
 TRIGGER_SECRET=some-long-random-string

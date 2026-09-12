@@ -1,8 +1,11 @@
 name: fetch-usdt-toman
+
+# No `schedule:` trigger here on purpose — GitHub Actions cron is imprecise
+# and unreliable for hourly jobs on public repos. Instead, a Cloudflare
+# Worker on a Cron Trigger calls the `workflow_dispatch` API below on a
+# reliable hourly schedule. See ../../wrangler.toml and ../../src/index.js.
 on:
-  schedule:
-    - cron: "0 * * * *" # every hour
-  workflow_dispatch: {} # lets you trigger manually to test
+  workflow_dispatch: {} # triggered by the Cloudflare Worker, or manually to test
 
 jobs:
   fetch:
