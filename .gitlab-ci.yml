@@ -1,0 +1,13 @@
+stages:
+  - deploy
+
+deploy:
+  stage: deploy
+  image: node:22
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - npm install
+    - npx wrangler deploy
+  environment:
+    name: production
