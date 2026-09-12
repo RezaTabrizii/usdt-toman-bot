@@ -11,6 +11,21 @@ Two pieces, on purpose:
 
 Why split it this way: GitHub's built-in cron scheduler is imprecise and can skip or delay runs on public repos — that's what Cloudflare's Cron Trigger fixes. But Nobitex and Wallex's anti-bot/WAF layer blocks requests originating from Cloudflare's IP ranges, so the price-fetching itself has to keep running from GitHub's runners, where it isn't blocked. The Worker is just a reliable "press the button" for GitHub Actions.
 
+## Repo mirroring
+
+This project lives on both GitLab (`origin`, hosts the Cloudflare deploy pipeline in [.gitlab-ci.yml](.gitlab-ci.yml)) and GitHub (`github`, hosts the Actions workflow that GitHub Actions itself needs to run). `origin` is configured with two push URLs, so a single push updates both:
+
+```bash
+git push origin main
+```
+
+To re-create this setup elsewhere:
+
+```bash
+git remote set-url --push origin <gitlab-url>
+git remote set-url --add --push origin <github-url>
+```
+
 ### fetch-price.js (runs on GitHub Actions)
 
 1. Fetches the USDT/Toman price from the [Nobitex](https://nobitex.ir) public API, converting the latest Rial price to Toman (`rial / 10`).
