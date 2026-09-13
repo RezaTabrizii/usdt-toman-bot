@@ -35,8 +35,8 @@ git remote set-url --add --push origin <github-url>
 
 ### src/index.js (runs on Cloudflare Workers)
 
-- `scheduled` — fired by the Cron Trigger in [wrangler.toml](wrangler.toml): `0 * * * *` (every hour, UTC). Calls `POST /repos/{owner}/{repo}/actions/workflows/fetch-price.yml/dispatches`.
-- `fetch` — `GET /run?key=<TRIGGER_SECRET>` triggers the same dispatch on demand, for testing. Returns 401 without the right key, and is disabled entirely if `TRIGGER_SECRET` isn't set.
+- `scheduled` — fired by the Cron Trigger in [wrangler.toml](wrangler.toml): `*/15 * * * *` (every 15 minutes, UTC). It only actually dispatches if more than ~50 minutes have passed since the last successful dispatch, tracked in the `LAST_RUN` KV namespace. Cloudflare's Cron Trigger has been observed to silently skip firing for hours at a time with no error logged — ticking every 15 minutes and gating on KV means a skipped tick self-heals on the next one instead of causing a multi-hour gap. Calls `POST /repos/{owner}/{repo}/actions/workflows/fetch-price.yml/dispatches`.
+- `fetch` — `GET /run?key=<TRIGGER_SECRET>` triggers a dispatch on demand, bypassing the KV guard, for testing. Returns 401 without the right key, and is disabled entirely if `TRIGGER_SECRET` isn't set.
 
 ## Setup
 

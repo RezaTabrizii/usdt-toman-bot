@@ -36,11 +36,28 @@ async function dispatchWorkflow(env) {
   }
 }
 
+// Cloudflare's Cron Trigger has occasionally gone silent for hours at a time
+// (observed: fired on deploy and once on schedule, then nothing for ~8 hours
+// before resuming) with no error logged — the platform just didn't invoke
+// `scheduled()`. Ticking every 15 minutes and gating on a KV timestamp means
+// a skipped tick self-heals on the next one instead of causing a long gap.
+const MIN_INTERVAL_MS = 50 * 60 * 1000; // 50 minutes
+
+async function dispatchIfDue(env) {
+  const last = await env.LAST_RUN.get("last_dispatch");
+  const now = Date.now();
+  if (last && now - Number(last) < MIN_INTERVAL_MS) {
+    return; // dispatched recently enough, nothing to do this tick
+  }
+  await dispatchWorkflow(env);
+  await env.LAST_RUN.put("last_dispatch", String(now));
+}
+
 export default {
   // Runs on the Cron Trigger defined in wrangler.toml
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(
-      dispatchWorkflow(env).catch((err) => {
+      dispatchIfDue(env).catch((err) => {
         console.error(err);
         throw err; // surfaces as a failed cron invocation in the dashboard
       }),

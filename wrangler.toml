@@ -2,9 +2,18 @@ name = "usdt-toman-bot"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
 
-# Every hour, on the hour (UTC)
+# Every 15 minutes. The Worker itself decides whether an hour has actually
+# elapsed since the last successful dispatch (see LAST_RUN in src/index.js) —
+# ticking more often than needed lets a skipped Cloudflare cron invocation
+# self-heal within ~15 minutes instead of going silent for hours.
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/15 * * * *"]
+
+# Tracks the timestamp of the last successful GitHub dispatch, so ticks that
+# land less than ~50 minutes after it are no-ops.
+[[kv_namespaces]]
+binding = "LAST_RUN"
+id = "351010a7ae6a42eaa25d246ae54d3ef6"
 
 # Non-secret config: which GitHub repo/workflow to dispatch
 [vars]
